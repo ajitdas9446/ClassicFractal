@@ -8,6 +8,10 @@ import math
 # Window dimensions
 width, height = 800, 800
 
+# Current recursion depth for animation
+current_order = 0
+max_order = 4  # Maximum recursion depth
+
 def draw_line(p1, p2):
     """
     Draws a straight line between two points.
@@ -51,7 +55,7 @@ def koch_snowflake(order, p1, p2):
 
 def draw_snowflake():
     """
-    Clears the screen and draws the complete Koch snowflake.
+    Clears the screen and draws the Koch snowflake up to the current recursion depth.
     """
     glClear(GL_COLOR_BUFFER_BIT)
     glBegin(GL_LINES)  # Start drawing lines
@@ -62,13 +66,24 @@ def draw_snowflake():
     p3 = (0.0, 0.6)
 
     # Draw each side of the triangle with the Koch snowflake pattern
-    order = 4  # Recursion depth; higher values yield more detail
-    koch_snowflake(order, p1, p2)
-    koch_snowflake(order, p2, p3)
-    koch_snowflake(order, p3, p1)
+    koch_snowflake(current_order, p1, p2)
+    koch_snowflake(current_order, p2, p3)
+    koch_snowflake(current_order, p3, p1)
 
     glEnd()  # End drawing lines
     glFlush()  # Ensure all drawing commands are executed
+
+def animate(value):
+    """
+    Timer callback function to incrementally draw the Koch snowflake.
+    :param value: Timer value (not used here).
+    """
+    global current_order
+
+    if current_order < max_order:
+        current_order += 1  # Increment the recursion depth
+        glutPostRedisplay()  # Request to redraw the screen
+        glutTimerFunc(1000, animate, 0)  # Set the timer for the next frame
 
 def reshape(w, h):
     """
@@ -90,13 +105,14 @@ def main():
     glutInit(sys.argv)  # Initialize GLUT
     glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)  # Set display mode
     glutInitWindowSize(width, height)  # Set window size
-    glutCreateWindow(b"Koch Snowflake")  # Create the window with a title
+    glutCreateWindow(b"Koch Snowflake Animation")  # Create the window with a title
 
     # Set up the rendering environment
     glClearColor(1.0, 1.0, 1.0, 1.0)  # Set background color to white
     glColor3f(0.0, 0.0, 0.0)  # Set drawing color to black
     glutDisplayFunc(draw_snowflake)  # Register the display callback
     glutReshapeFunc(reshape)  # Register the reshape callback
+    glutTimerFunc(1000, animate, 0)  # Start the animation timer (1000ms interval)
 
     glutMainLoop()  # Enter the GLUT event-processing loop
 
