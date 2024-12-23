@@ -1,119 +1,164 @@
 import sys
+import math
+import time
+import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
-import math
+from PIL import Image
 
 # Window dimensions
 width, height = 800, 800
 
-# Current recursion depth for animation
-current_order = 0
-max_order = 4  # Maximum recursion depth
+# Parameters for twin Christmas trees
+initial_length = 0.4  # Length of the initial branches
+recursion_depth = 8   # Number of recursive levels
+branch_angle = math.pi / 6  # Angle between branches
+scale_factor = 0.5  # Reduce the tree size
 
-def draw_line(p1, p2):
+# Store the drawing steps to simulate the animation
+drawing_steps = []
+
+# Background image path
+background_image_path = "./image/desert.jpeg"  # Replace with your image file path
+
+
+def load_texture():
     """
-    Draws a straight line between two points.
-    :param p1: Starting point (x1, y1)
-    :param p2: Ending point (x2, y2)
+    Loads a texture from an image file.
     """
-    glVertex2f(p1[0], p1[1])
-    glVertex2f(p2[0], p2[1])
+    img = Image.open(background_image_path)
+    img_data = np.array(list(img.getdata()), np.uint8)
 
-def koch_snowflake(order, p1, p2):
+    # Enable texture mapping
+    glEnable(GL_TEXTURE_2D)
+
+    # Generate and bind texture
+    tex_id = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, tex_id)
+
+    # Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+    # Load the texture data
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
+
+    return tex_id
+
+
+def draw_background():
     """
-    Recursively generates the Koch snowflake pattern.
-    :param order: Current recursion depth.
-    :param p1: Starting point of the segment.
-    :param p2: Ending point of the segment.
+    Draws the background using a texture.
     """
-    if order == 0:
-        # Base case: Draw a straight line
-        draw_line(p1, p2)
-    else:
-        # Decompose the line segment into three parts
-        x1, y1 = p1
-        x2, y2 = p2
+    glBindTexture(GL_TEXTURE_2D, background_texture)
 
-        # Calculate the first and second division points (p3 and p4)
-        p3 = ((2 * x1 + x2) / 3, (2 * y1 + y2) / 3)
-        p4 = ((x1 + 2 * x2) / 3, (y1 + 2 * y2) / 3)
+    glBegin(GL_QUADS)
+    glTexCoord2f(0.0, 0.0)
+    glVertex2f(-1.5, -1.5)  # Bottom-left
 
-        # Compute the peak of the equilateral triangle to be added (p5)
-        dx, dy = x2 - x1, y2 - y1  # Direction vector of the segment
-        angle = math.pi / 3  # 60 degrees in radians
-        px = p3[0] + math.cos(angle) * dx / 3 - math.sin(angle) * dy / 3
-        py = p3[1] + math.sin(angle) * dx / 3 + math.cos(angle) * dy / 3
-        p5 = (px, py)
+    glTexCoord2f(1.0, 0.0)
+    glVertex2f(1.5, -1.5)  # Bottom-right
 
-        # Recursively apply the Koch pattern to the four new segments
-        koch_snowflake(order - 1, p1, p3)
-        koch_snowflake(order - 1, p3, p5)
-        koch_snowflake(order - 1, p5, p4)
-        koch_snowflake(order - 1, p4, p2)
+    glTexCoord2f(1.0, 1.0)
+    glVertex2f(1.5, 1.5)  # Top-right
 
-def draw_snowflake():
+    glTexCoord2f(0.0, 1.0)
+    glVertex2f(-1.5, 1.5)  # Top-left
+    glEnd()
+
+
+def draw_branch(x, y, length, angle, depth, direction):
     """
-    Clears the screen and draws the Koch snowflake up to the current recursion depth.
+    Recursively draws branches for a Christmas tree and stores the steps for animation.
+    """
+    if depth == 0:
+        return
+
+    # Calculate the end coordinates of the branch
+    x_end = x + length * math.cos(angle)
+    y_end = y + length * math.sin(angle)
+
+    # Store the drawing step (start and end points of the branch)
+    drawing_steps.append((x, y, x_end, y_end))
+
+    # Reduce branch length and recurse
+    new_length = length * 0.7
+    draw_branch(x_end, y_end, new_length, angle + branch_angle * direction, depth - 1, direction)
+    draw_branch(x_end, y_end, new_length, angle - branch_angle * direction, depth - 1, direction)
+
+
+def draw_twin_trees():
+    """
+    Draws two symmetrical Christmas trees with animation.
+    """
+    draw_branch(-0.5 * scale_factor, -0.8 * scale_factor, initial_length * scale_factor, math.pi / 2, recursion_depth, direction=-1)
+    draw_branch(0.5 * scale_factor, -0.8 * scale_factor, initial_length * scale_factor, math.pi / 2, recursion_depth, direction=1)
+
+
+def display():
+    """
+    Updates the display with one step of the drawing process.
     """
     glClear(GL_COLOR_BUFFER_BIT)
-    glBegin(GL_LINES)  # Start drawing lines
 
-    # Define the initial vertices of the triangle
-    p1 = (-0.5, -0.3)
-    p2 = (0.5, -0.3)
-    p3 = (0.0, 0.6)
+    # Draw the background
+    draw_background()
 
-    # Draw each side of the triangle with the Koch snowflake pattern
-    koch_snowflake(current_order, p1, p2)
-    koch_snowflake(current_order, p2, p3)
-    koch_snowflake(current_order, p3, p1)
+    if len(drawing_steps) > 0:
+        # Get the next step to draw
+        x1, y1, x2, y2 = drawing_steps.pop(0)
 
-    glEnd()  # End drawing lines
-    glFlush()  # Ensure all drawing commands are executed
+        # Draw the current branch
+        glBegin(GL_LINES)
+        glVertex2f(x1, y1)
+        glVertex2f(x2, y2)
+        glEnd()
+        glFlush()
 
-def animate(value):
-    """
-    Timer callback function to incrementally draw the Koch snowflake.
-    :param value: Timer value (not used here).
-    """
-    global current_order
+    if len(drawing_steps) > 0:
+        glutPostRedisplay()  # Request the next display update
+    else:
+        time.sleep(1)  # Pause for a second after finishing
 
-    if current_order < max_order:
-        current_order += 1  # Increment the recursion depth
-        glutPostRedisplay()  # Request to redraw the screen
-        glutTimerFunc(1000, animate, 0)  # Set the timer for the next frame
 
 def reshape(w, h):
     """
-    Handles window resizing to maintain the correct aspect ratio.
-    :param w: New width of the window.
-    :param h: New height of the window.
+    Adjusts the viewport and projection matrix when the window is resized.
     """
-    glViewport(0, 0, w, h)  # Set the viewport to cover the new window
-    glMatrixMode(GL_PROJECTION)  # Select the projection matrix
-    glLoadIdentity()  # Reset the projection matrix
-    gluOrtho2D(-1.0, 1.0, -1.0, 1.0)  # Set an orthographic projection
-    glMatrixMode(GL_MODELVIEW)  # Select the model-view matrix
-    glLoadIdentity()  # Reset the model-view matrix
+    glViewport(0, 0, w, h)
+    glMatrixMode(GL_PROJECTION)
+    glLoadIdentity()
+    gluOrtho2D(-1.5, 1.5, -1.5, 1.5)
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+
 
 def main():
     """
-    Initializes the GLUT environment and runs the main loop.
+    Initializes the GLUT environment and runs the twin Christmas trees visualization.
     """
-    glutInit(sys.argv)  # Initialize GLUT
-    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)  # Set display mode
-    glutInitWindowSize(width, height)  # Set window size
-    glutCreateWindow(b"Koch Snowflake Animation")  # Create the window with a title
+    global background_texture
 
-    # Set up the rendering environment
-    glClearColor(1.0, 1.0, 1.0, 1.0)  # Set background color to white
-    glColor3f(0.0, 0.0, 0.0)  # Set drawing color to black
-    glutDisplayFunc(draw_snowflake)  # Register the display callback
-    glutReshapeFunc(reshape)  # Register the reshape callback
-    glutTimerFunc(1000, animate, 0)  # Start the animation timer (1000ms interval)
+    glutInit(sys.argv)
+    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)
+    glutInitWindowSize(width, height)
+    glutCreateWindow(b"Twin Christmas Trees with Background")
 
-    glutMainLoop()  # Enter the GLUT event-processing loop
+    glClearColor(1.0, 1.0, 1.0, 1.0)
+    glColor3f(0.0, 0.8, 0.0)
+
+    # Load the background texture
+    background_texture = load_texture()
+
+    glutDisplayFunc(display)
+    glutReshapeFunc(reshape)
+
+    draw_twin_trees()
+    glutMainLoop()
+
 
 if __name__ == "__main__":
     main()
